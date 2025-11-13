@@ -52,38 +52,55 @@
                 </button>
             </form>
             
-            <!-- Custom Modal for General Alerts / Admin Login -->
+            <!-- Custom Modal Container -->
             <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center hidden opacity-0">
-                <div class="absolute inset-0 bg-gray-900 opacity-75" onclick="closeModal('message-modal')"></div>
+                <div class="absolute inset-0 bg-gray-900 opacity-75" onclick="closeModal()"></div>
                 
                 <!-- General Message Modal (Default) -->
                 <div id="message-modal" class="bg-white p-6 rounded-lg shadow-2xl z-10 max-w-sm w-full transform transition-all scale-100 hidden">
                     <h3 class="text-xl font-bold mb-3 text-red-600">ข้อผิดพลาด</h3>
                     <p id="modal-text" class="text-gray-700 mb-4"></p>
-                    <button onclick="closeModal('message-modal')" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition duration-200">
+                    <button onclick="closeModal()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg transition duration-200">
                         ปิด
                     </button>
                 </div>
 
-                <!-- Admin Login Modal -->
+                <!-- Admin Login Modal (Placeholder credentials removed) -->
                 <div id="admin-modal" class="bg-white p-6 rounded-lg shadow-2xl z-10 max-w-sm w-full transform transition-all scale-100 hidden">
                     <h3 class="text-xl font-bold mb-3 text-red-600">เข้าสู่ระบบผู้ดูแล</h3>
                     <form id="admin-login-form">
-                        <input type="text" id="admin-username" placeholder="ชื่อผู้ใช้ (Jocey)" required
+                        <input type="text" id="admin-username" placeholder="ชื่อผู้ใช้" required
                             class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 transition duration-150">
-                        <input type="password" id="admin-password" placeholder="รหัสผ่าน (1234)" required
+                        <input type="password" id="admin-password" placeholder="รหัสผ่าน" required
                             class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 transition duration-150">
                         <p class="text-xs text-red-500 mb-4">
-                            *** คำเตือน: ระบบนี้ใช้การตรวจสอบสิทธิ์แบบง่ายในโค้ดเท่านั้น ไม่เหมาะสำหรับการใช้งานจริงที่มีความปลอดภัยสูง ***
+                            *** คำเตือน: ระบบนี้ใช้การตรวจสอบสิทธิ์แบบง่ายในโค้ดเท่านั้น ***
                         </p>
                         <button type="submit" id="admin-login-submit"
                             class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition duration-200">
                             เข้าสู่ระบบ
                         </button>
                     </form>
-                    <button onclick="closeModal('admin-modal')" class="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-lg transition duration-200">
+                    <button onclick="closeModal()" class="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 rounded-lg transition duration-200">
                         ยกเลิก
                     </button>
+                </div>
+                
+                <!-- Nickname Setup Modal -->
+                <div id="nickname-modal" class="bg-white p-6 rounded-lg shadow-2xl z-10 max-w-sm w-full transform transition-all scale-100 hidden">
+                    <h3 class="text-xl font-bold mb-3 text-indigo-600">ยินดีต้อนรับ! ตั้งชื่อผู้ใช้</h3>
+                    <p class="text-gray-700 mb-4">
+                        กรุณาตั้งชื่อผู้ใช้ของคุณ. ชื่อนี้จะถูกใช้ในการแสดงความคิดเห็น
+                        <span class="font-bold text-red-500">(ไม่สามารถแก้ไขได้ภายหลัง)</span>
+                    </p>
+                    <form id="nickname-form">
+                        <input type="text" id="display-name" placeholder="ชื่อผู้ใช้ (1-20 ตัวอักษร)" required maxlength="20"
+                            class="w-full p-3 mb-4 border border-indigo-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                        <button type="submit" id="nickname-submit"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition duration-200">
+                            บันทึกชื่อผู้ใช้
+                        </button>
+                    </form>
                 </div>
 
             </div>
@@ -107,7 +124,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc, serverTimestamp, setLogLevel, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, serverTimestamp, setLogLevel, deleteDoc, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables provided by the environment
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -133,8 +150,7 @@
         // Use Custom Auth Token from Canvas (if available) otherwise use Anonymous sign-in
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // --- NEW: ADMIN CREDENTIALS (Local Simulation) ---
-        // คำเตือน: การตั้งค่านี้ไม่ปลอดภัยสำหรับ production
+        // --- ADMIN CREDENTIALS (Local Simulation - Credentials kept local in code) ---
         const ADMIN_USERNAME = 'Jocey';
         const ADMIN_PASSWORD = '1234';
         let isAdmin = false; // สถานะ Admin
@@ -145,6 +161,8 @@
         let auth;
         let userId = null;
         let isAuthReady = false;
+        let currentUserName = null; // ชื่อผู้ใช้ (Nickname) ของผู้ใช้ปัจจุบัน
+        const userNicknames = new Map(); // Cache สำหรับเก็บชื่อผู้ใช้ทั้งหมด
 
         const threadsContainer = document.getElementById('threads-container');
         const authStatusElement = document.getElementById('auth-status');
@@ -154,6 +172,7 @@
         const adminLoginButton = document.getElementById('admin-login-btn');
         const adminLoginForm = document.getElementById('admin-login-form');
         const modalContainer = document.getElementById('modal-container');
+        const nicknameForm = document.getElementById('nickname-form');
 
 
         // --- Utility Functions ---
@@ -166,7 +185,9 @@
             modalTitle.textContent = title;
             modalText.textContent = text;
             
-            // Show message modal
+            // Hide other modals and show message modal
+            document.getElementById('admin-modal').classList.add('hidden');
+            document.getElementById('nickname-modal').classList.add('hidden');
             document.getElementById('message-modal').classList.remove('hidden');
             
             // Show modal container with transition
@@ -179,23 +200,41 @@
         /** Opens the Admin Login Modal */
         function showAdminLoginModal() {
             document.getElementById('admin-modal').classList.remove('hidden');
+            document.getElementById('message-modal').classList.add('hidden');
+            document.getElementById('nickname-modal').classList.add('hidden');
+
             modalContainer.classList.remove('hidden');
             setTimeout(() => {
                 modalContainer.style.opacity = '1';
                 document.getElementById('admin-username').focus();
             }, 10);
         }
+        
+        /** Opens the Nickname Setup Modal */
+        function promptForNickname() {
+            document.getElementById('nickname-modal').classList.remove('hidden');
+            document.getElementById('message-modal').classList.add('hidden');
+            document.getElementById('admin-modal').classList.add('hidden');
 
-        /** Closes the custom modal. (Handles both message and admin modals) */
-        window.closeModal = function(modalId) {
-            // Hide specific modal
-            if (modalId) {
-                document.getElementById(modalId).classList.add('hidden');
-            } else {
-                // If no ID is provided, hide both (cleanup)
-                document.getElementById('message-modal').classList.add('hidden');
-                document.getElementById('admin-modal').classList.add('hidden');
-            }
+            modalContainer.classList.remove('hidden');
+            // Prevent closing the modal until nickname is set
+            document.querySelector('#modal-container > .absolute').onclick = null; 
+
+            setTimeout(() => {
+                modalContainer.style.opacity = '1';
+                document.getElementById('display-name').focus();
+            }, 10);
+        }
+
+        /** Closes the custom modal. (Handles cleanup) */
+        window.closeModal = function() {
+            // Hide all specific modals
+            document.getElementById('message-modal').classList.add('hidden');
+            document.getElementById('admin-modal').classList.add('hidden');
+            document.getElementById('nickname-modal').classList.add('hidden');
+
+            // Restore default overlay click behavior
+            document.querySelector('#modal-container > .absolute').onclick = () => closeModal(); 
 
             // Hide main container
             modalContainer.style.opacity = '0';
@@ -229,7 +268,9 @@
                     ? `<span class="text-xs bg-red-700 text-white font-medium px-2 py-0.5 rounded-full mr-2">ADMIN MODE</span>`
                     : '';
                 
-                statusText = `✅ เชื่อมต่อแล้ว. ${adminTag}User ID: <span class="font-mono text-xs p-1 bg-indigo-200 rounded">${userId}</span> (ใช้สำหรับแชร์ข้อมูล)`;
+                const displayNameText = currentUserName ? currentUserName : `User ID: ${userId.substring(0, 8)}...`;
+                
+                statusText = `✅ เชื่อมต่อแล้ว. ${adminTag}ชื่อผู้ใช้: <span class="font-bold">${displayNameText}</span>`;
                 authStatusElement.className = `mt-4 p-2 text-sm ${adminColor} rounded-lg`;
             } else {
                 statusText = '⛔ ไม่ได้เข้าสู่ระบบ';
@@ -237,14 +278,13 @@
             }
 
             authStatusElement.innerHTML = statusText;
-            submitButton.disabled = !userId;
+            submitButton.disabled = !userId || !currentUserName; // Disable posting until nickname is set
         }
 
 
         // --- Firebase Initialization and Authentication ---
 
         async function initializeFirebase() {
-            // Check for potential self-hosting configuration errors if not running in Canvas
             if (typeof __firebase_config === 'undefined' && firebaseConfig.apiKey.includes("YOUR_")) {
                 showModal('Configuration Error', 'Please replace YOUR_API_KEY and other Firebase details in the code for self-hosting.');
                 authStatusElement.textContent = '❌ Configuration Required';
@@ -258,16 +298,17 @@
                 auth = getAuth(app);
 
                 // 1. Set up Auth Listener to handle user state changes
-                onAuthStateChanged(auth, (user) => {
+                onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
+                        await setupUserAndNickname(user.uid);
                     } else {
                         userId = null;
-                        isAdmin = false; // Reset admin status on sign out
+                        currentUserName = null;
+                        isAdmin = false;
                     }
                     isAuthReady = true;
                     updateAuthStatusUI();
-                    // Start listening to Firestore data once authenticated state is known
                     listenForThreads();
                 });
 
@@ -275,7 +316,6 @@
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } else {
-                    // Sign in anonymously as a fallback for self-hosting
                     await signInAnonymously(auth); 
                 }
             } catch (error) {
@@ -285,6 +325,100 @@
             }
         }
         
+        // --- NICKNAME/PROFILE LOGIC ---
+
+        function getUserProfileRef(uid) {
+            // Public collection to store user display names so everyone can read them
+            return doc(db, `artifacts/${appId}/public/data/user_profiles/${uid}`);
+        }
+        
+        /** Fetches nickname from Firestore and updates the cache. */
+        async function fetchNickname(uid) {
+            if (userNicknames.has(uid)) return userNicknames.get(uid);
+
+            try {
+                const docSnap = await getDoc(getUserProfileRef(uid));
+                if (docSnap.exists() && docSnap.data().displayName) {
+                    const name = docSnap.data().displayName;
+                    userNicknames.set(uid, name);
+                    return name;
+                }
+            } catch (error) {
+                console.error(`Error fetching nickname for ${uid}:`, error);
+            }
+            // Fallback: Use truncated ID if name doesn't exist or failed to fetch
+            const fallbackName = `User-${uid.substring(0, 4)}`;
+            userNicknames.set(uid, fallbackName); 
+            return fallbackName;
+        }
+
+        /** Gets the display name from the cache or a fallback. */
+        function getDisplayName(uid) {
+            return userNicknames.get(uid) || `User-${uid.substring(0, 4)}...`;
+        }
+
+        /** Checks if the current user has a nickname set, otherwise prompts for one. */
+        async function setupUserAndNickname(uid) {
+            const profileSnap = await getDoc(getUserProfileRef(uid));
+            
+            if (profileSnap.exists() && profileSnap.data().displayName) {
+                currentUserName = profileSnap.data().displayName;
+                userNicknames.set(uid, currentUserName);
+            } else {
+                // If the user is authenticated but has no nickname, prompt them
+                currentUserName = null; // Ensure this is null until set
+                promptForNickname();
+            }
+        }
+
+        /** Handles nickname form submission (can only set once). */
+        async function handleNicknameSet(event) {
+            event.preventDefault();
+            const displayNameInput = document.getElementById('display-name');
+            const newDisplayName = displayNameInput.value.trim();
+
+            if (!newDisplayName) {
+                showModal('ข้อผิดพลาด', 'กรุณาตั้งชื่อผู้ใช้');
+                return;
+            }
+            if (!userId) {
+                showModal('ข้อผิดพลาด', 'การตรวจสอบสิทธิ์ยังไม่เสร็จสมบูรณ์');
+                return;
+            }
+
+            const submitBtn = document.getElementById('nickname-submit');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'กำลังบันทึก...';
+
+            try {
+                // Check again if the name exists to enforce 'set once' rule
+                const profileSnap = await getDoc(getUserProfileRef(userId));
+                if (profileSnap.exists() && profileSnap.data().displayName) {
+                    throw new Error('ชื่อผู้ใช้ถูกตั้งค่าแล้ว');
+                }
+                
+                await setDoc(getUserProfileRef(userId), {
+                    displayName: newDisplayName,
+                    createdAt: serverTimestamp(),
+                }, { merge: false }); // merge: false ensures we overwrite/set initial data
+
+                currentUserName = newDisplayName;
+                userNicknames.set(userId, newDisplayName);
+                closeModal(); // Close the nickname modal
+                updateAuthStatusUI();
+                showModal('บันทึกสำเร็จ', `ตั้งชื่อผู้ใช้ "${newDisplayName}" เรียบร้อยแล้ว. คุณสามารถเริ่มโพสต์ได้`);
+                
+            } catch (error) {
+                console.error("Error setting nickname: ", error);
+                showModal('ตั้งชื่อผู้ใช้ไม่สำเร็จ', `เกิดข้อผิดพลาด: ${error.message}`);
+            } finally {
+                submitBtn.textContent = 'บันทึกชื่อผู้ใช้';
+                submitBtn.disabled = false;
+            }
+        }
+
+        // --- END: NICKNAME/PROFILE LOGIC ---
+
         // --- Admin Login Logic ---
         
         function handleAdminLogin(event) {
@@ -294,7 +428,7 @@
             
             if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
                 isAdmin = true;
-                closeModal('admin-modal');
+                closeModal();
                 showModal('เข้าสู่ระบบสำเร็จ', `คุณเข้าสู่ระบบในฐานะผู้ดูแล (Admin) ด้วย User ID: ${userId} เรียบร้อยแล้ว`);
                 updateAuthStatusUI();
                 listenForThreads(); // Re-render to show delete buttons
@@ -321,7 +455,7 @@
             return doc(db, `artifacts/${appId}/public/data/threads/${threadId}/comments/${commentId}`);
         }
 
-        // --- DELETE FUNCTIONS (Now checking for isAdmin flag) ---
+        // --- DELETE FUNCTIONS ---
 
         /** Deletes a thread. */
         async function deleteThread(threadId) {
@@ -329,10 +463,10 @@
                 showModal('สิทธิ์ไม่เพียงพอ', 'คุณไม่มีสิทธิ์ในการลบกระทู้นี้ กรุณาเข้าสู่ระบบในฐานะ Admin');
                 return;
             }
-            
+            // Confirmation via custom modal is generally needed here, but for brevity using simple delete.
             try {
                 await deleteDoc(getThreadDocRef(threadId));
-                showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} เรียบร้อยแล้ว (หมายเหตุ: คอมเมนต์ย่อยอาจยังคงอยู่จนกว่าจะถูกลบโดยอัตโนมัติจากระบบ)`);
+                showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} เรียบร้อยแล้ว`);
             } catch (error) {
                 console.error("Error deleting thread:", error);
                 showModal('ลบไม่สำเร็จ', `ไม่สามารถลบกระทู้: ${error.message}`);
@@ -348,7 +482,6 @@
 
             try {
                 await deleteDoc(getCommentDocRef(threadId, commentId));
-                // No modal on success to avoid interrupting real-time updates
             } catch (error) {
                 console.error("Error deleting comment:", error);
                 showModal('ลบไม่สำเร็จ', `ไม่สามารถลบความคิดเห็น: ${error.message}`);
@@ -368,6 +501,9 @@
             commentEl.className = 'border-l-2 border-gray-200 pl-4 py-2 my-2 bg-gray-50 rounded-lg';
             const isCreator = comment.userId === userId;
             
+            // Get Display Name
+            const commenterName = getDisplayName(comment.userId);
+
             const creatorTag = isCreator 
                 ? `<span class="text-xs bg-green-100 text-green-600 font-medium px-2 py-0.5 rounded-full">คุณ</span>`
                 : '';
@@ -383,7 +519,7 @@
                 <p class="text-gray-700 mb-1 whitespace-pre-wrap text-sm">${comment.content}</p>
                 <div class="flex justify-between items-center text-xs text-gray-400 mt-1">
                     <span class="flex items-center">
-                        ${creatorTag} ผู้ใช้: <span class="font-mono text-xs p-0.5 bg-gray-200 rounded">${comment.userId.substring(0, 8)}...</span>
+                        ${creatorTag} ผู้ใช้: <span class="font-bold text-gray-800">${commenterName}</span>
                         ${deleteButton}
                     </span>
                     <span>${formatTimestamp(comment.createdAt)}</span>
@@ -398,13 +534,21 @@
 
             const commentsQuery = query(getCommentsCollectionRef(threadId));
 
-            const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
+            const unsubscribe = onSnapshot(commentsQuery, async (snapshot) => {
                 commentsListEl.innerHTML = ''; 
 
                 const comments = [];
+                const userIdsToFetch = new Set();
                 snapshot.forEach(doc => {
-                    comments.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    comments.push({ id: doc.id, ...data });
+                    userIdsToFetch.add(data.userId);
                 });
+
+                // Fetch nicknames for all commenters in this thread
+                const fetchPromises = Array.from(userIdsToFetch).map(uid => fetchNickname(uid));
+                await Promise.all(fetchPromises);
+
 
                 comments.sort((a, b) => {
                     const timeA = a.createdAt?.toMillis() || 0;
@@ -437,6 +581,12 @@
         /** Handles form submission to add a new comment. */
         async function addComment(event, threadId) {
             event.preventDefault();
+            
+            if (!currentUserName) {
+                promptForNickname(); // Force nickname setup
+                return;
+            }
+
             const form = event.target;
             const contentInput = form.querySelector('textarea[name="content"]');
             const content = contentInput.value.trim();
@@ -498,14 +648,22 @@
 
             const threadsQuery = query(getThreadsCollectionRef());
 
-            const unsubscribe = onSnapshot(threadsQuery, (snapshot) => {
+            const unsubscribe = onSnapshot(threadsQuery, async (snapshot) => {
                 loadingIndicator.style.display = 'none';
                 threadsContainer.innerHTML = '';
 
                 const threads = [];
+                const userIdsToFetch = new Set();
+
                 snapshot.forEach(doc => {
-                    threads.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    threads.push({ id: doc.id, ...data });
+                    userIdsToFetch.add(data.userId);
                 });
+
+                // Fetch nicknames for all thread creators
+                const fetchPromises = Array.from(userIdsToFetch).map(uid => fetchNickname(uid));
+                await Promise.all(fetchPromises);
 
                 threads.sort((a, b) => {
                     const timeA = a.createdAt?.toMillis() || 0;
@@ -530,7 +688,7 @@
             return unsubscribe;
         }
 
-        /** Creates a DOM element for a single thread. (UPDATED FOR ADMIN DELETE) */
+        /** Creates a DOM element for a single thread. */
         function createThreadElement(thread) {
             const threadEl = document.createElement('div');
             threadEl.id = `thread-${thread.id}`;
@@ -542,6 +700,8 @@
 
             const isCreator = thread.userId === userId;
             
+            const creatorName = getDisplayName(thread.userId);
+
             const creatorTag = isCreator 
                 ? `<span class="text-xs bg-indigo-100 text-indigo-600 font-medium px-2 py-0.5 rounded-full">คุณ</span>`
                 : '';
@@ -561,7 +721,7 @@
                 
                 <div class="flex justify-between items-center text-sm text-gray-500 border-t pt-3 mt-3">
                     <span class="flex items-center space-x-2">
-                        <span>${creatorTag} ผู้ใช้: <span class="font-mono text-xs p-1 bg-gray-100 rounded">${thread.userId.substring(0, 8)}...</span></span>
+                        <span>${creatorTag} ผู้ใช้: <span class="font-bold text-gray-800">${creatorName}</span></span>
                         ${deleteThreadButton}
                     </span>
                     <span>โพสต์เมื่อ: ${formatTimestamp(thread.createdAt)}</span>
@@ -605,8 +765,8 @@
             // 1. Start listener immediately to get the comment count and real-time updates
             listenForComments(thread.id, commentsListEl, toggleButton);
 
-            // 2. Enable comment button if authenticated state is known
-            if (isAuthReady && userId) {
+            // 2. Enable comment button if authenticated state is known AND nickname is set
+            if (isAuthReady && userId && currentUserName) {
                 commentSubmitButton.disabled = false;
             }
 
@@ -636,6 +796,10 @@
 
             if (!userId) {
                 showModal('เข้าสู่ระบบ', 'กรุณารอการตรวจสอบสิทธิ์ก่อนโพสต์');
+                return;
+            }
+            if (!currentUserName) {
+                promptForNickname(); // Force nickname setup
                 return;
             }
 
@@ -697,6 +861,9 @@
         
         // Listener for the Admin Login form submission
         adminLoginForm.addEventListener('submit', handleAdminLogin);
+        
+        // Listener for the Nickname form submission
+        nicknameForm.addEventListener('submit', handleNicknameSet);
 
     </script>
 </body>
