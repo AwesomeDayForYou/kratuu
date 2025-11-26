@@ -160,6 +160,11 @@
         let isAdmin = false; // Admin status
         // -------------------------------------------------
 
+        // --- BACKEND ENDPOINT FOR CASCADING DELETE (Hypothetical) ---
+        // In a real application, this would be the URL of a deployed Cloud Function or API endpoint.
+        const ADMIN_DELETE_ENDPOINT = 'https://your-cloud-function-url.cloudfunctions.net/deleteThread';
+        // -----------------------------------------------------------
+
         let app;
         let db;
         let auth;
@@ -460,16 +465,67 @@
             return doc(db, `artifacts/${appId}/public/data/threads/${threadId}/comments/${commentId}`);
         }
 
-        // --- DELETE FUNCTIONS ---
-
-        /** Deletes a thread. */
-        async function deleteThread(threadId) {
+        // --- DELETE FUNCTIONS (UPDATED) ---
+        
+        /** * Calls a backend service to recursively delete a thread and its subcollection. 
+         * NOTE: This is a placeholder call and will only succeed if a service running 
+         * the Admin SDK (like a Cloud Function) is deployed at ADMIN_DELETE_ENDPOINT.
+         */
+        async function callAdminDeleteThread(threadId) {
             if (!isAdmin) {
                 showModal('สิทธิ์ไม่เพียงพอ', 'คุณไม่มีสิทธิ์ในการลบกระทู้นี้ กรุณาเข้าสู่ระบบในฐานะ Admin');
                 return;
             }
-            // Note: Cascading delete for subcollections (comments) must be handled by Firestore Rules/Cloud Functions.
-            // On the client side, we just delete the thread document.
+
+            // In a real environment, you'd secure this API call, e.g., by passing the user's ID token.
+            const token = await auth.currentUser?.getIdToken();
+
+            showModal('กำลังดำเนินการ', 'กำลังลบกระทู้และความคิดเห็นทั้งหมด (ติดต่อ Admin Service...)');
+
+            try {
+                // *** SIMULATION OF ADMIN SERVICE FAILURE ***
+                // Since there is no actual running backend service, this will fail.
+                // We show an informative error for the user to understand the requirement.
+                throw new Error("Recursive deletion requires a deployed Admin SDK service (e.g., Cloud Function). The local simulation cannot perform this.");
+                
+                /* // *** REAL API CALL (if ADMIN_DELETE_ENDPOINT were deployed) ***
+                const response = await fetch(ADMIN_DELETE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // Pass token for verification
+                    },
+                    body: JSON.stringify({ appId: appId, threadId: threadId })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Server failed to delete thread recursively.');
+                }
+                
+                showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} และความคิดเห็นทั้งหมดเรียบร้อยแล้ว`);
+                */
+
+            } catch (error) {
+                console.error("Error calling Admin Delete Endpoint:", error);
+                
+                // If the simulated call fails, use a fallback client-side delete, 
+                // but warn the admin that comments might be left behind (orphaned data).
+                if (error.message.includes("Cloud Function") || error.message.includes("cannot perform this")) {
+                    await deleteThreadFallback(threadId); // Fallback to client-side delete
+                } else {
+                    // Show actual API error
+                    showModal('ลบไม่สำเร็จ (Admin Service)', `ไม่สามารถเรียกใช้ Admin Service ได้: ${error.message}`);
+                }
+            }
+        }
+        
+        /** * Fallback client-side delete for when the Admin Service is not available. 
+         * WARNS the admin about orphaned subcollections (comments).
+         */
+        async function deleteThreadFallback(threadId) {
+            if (!isAdmin) return; // Should already be checked
+
             try {
                 let retryCount = 0;
                 const maxRetries = 5;
@@ -478,7 +534,8 @@
                 while (retryCount < maxRetries) {
                     try {
                         await deleteDoc(getThreadDocRef(threadId));
-                        showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} เรียบร้อยแล้ว`);
+                        showModal('ลบสำเร็จ (Client-Side)', `⚠️ ลบกระทู้ ID: ${threadId} แล้ว. 
+                            (เนื่องจากไม่มี Admin Service, ความคิดเห็นย่อยอาจยังคงอยู่)`);
                         break;
                     } catch (error) {
                         retryCount++;
@@ -491,12 +548,12 @@
                     }
                 }
             } catch (error) {
-                console.error("Error deleting thread:", error);
-                showModal('ลบไม่สำเร็จ', `ไม่สามารถลบกระทู้: ${error.message}`);
+                console.error("Error deleting thread (fallback):", error);
+                showModal('ลบไม่สำเร็จ (Fallback)', `ไม่สามารถลบกระทู้: ${error.message}`);
             }
         }
 
-        /** Deletes a single comment. */
+        /** Deletes a single comment (always possible from client). */
         async function deleteComment(threadId, commentId) {
             if (!isAdmin) {
                 showModal('สิทธิ์ไม่เพียงพอ', 'คุณไม่มีสิทธิ์ในการลบความคิดเห็นนี้ กรุณาเข้าสู่ระบบในฐานะ Admin');
@@ -529,7 +586,7 @@
         }
         
         // Expose wrappers to global scope for use in onclick attributes
-        window.deleteThreadWrapper = deleteThread;
+        window.deleteThreadWrapper = callAdminDeleteThread; // New wrapper uses the admin call function
         window.deleteCommentWrapper = deleteComment;
 
         // --- END: DELETE FUNCTIONS ---
