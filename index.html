@@ -7,7 +7,7 @@
     <!-- โหลด Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome for Trash Icon -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" xintegrity="sha512-Fo3rlrZj/k7ujTn9k5Fz4v2gBq/n6lBf8D8+QJpC6o7d5P6C1TzC6vX5f4y7a6i4o9I6eK/zF/X+r8QeF3Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+Thai:wght@100..900&display=swap');
         body {
@@ -17,6 +17,10 @@
         /* Style for the fixed modal overlay */
         #modal-container {
             transition: opacity 0.3s ease-in-out;
+        }
+        /* Ensure content respects whitespace for formatting */
+        .whitespace-pre-wrap {
+            white-space: pre-wrap;
         }
     </style>
 </head>
@@ -65,7 +69,7 @@
                     </button>
                 </div>
 
-                <!-- Admin Login Modal (Placeholder credentials removed) -->
+                <!-- Admin Login Modal -->
                 <div id="admin-modal" class="bg-white p-6 rounded-lg shadow-2xl z-10 max-w-sm w-full transform transition-all scale-100 hidden">
                     <h3 class="text-xl font-bold mb-3 text-red-600">เข้าสู่ระบบผู้ดูแล</h3>
                     <form id="admin-login-form">
@@ -120,7 +124,7 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs and Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -131,9 +135,8 @@
 
         // ----------------------------------------------------------------------
         // --- START: CONFIGURATION FOR SELF-HOSTING (*** DO NOT CHANGE ***) ---
-        // Firebase Configuration 
+        // Firebase Configuration (Using the values provided by the user)
         const myFirebaseConfig = {
-            // อัปเดตด้วยค่าที่คุณให้มาล่าสุด
             apiKey: "AIzaSyBpPa3wswWOVTh1_6KoSPBM6xL7BIBmXwI", 
             authDomain: "coffee-spark-ai-barista-bbcaa.firebaseapp.com",
             projectId: "coffee-spark-ai-barista-bbcaa",
@@ -151,9 +154,10 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // --- ADMIN CREDENTIALS (Local Simulation - Credentials kept local in code) ---
+        // NOTE: These credentials are for front-end simulation only and do not bypass Firestore rules.
         const ADMIN_USERNAME = 'Jocey';
         const ADMIN_PASSWORD = '1234';
-        let isAdmin = false; // สถานะ Admin
+        let isAdmin = false; // Admin status
         // -------------------------------------------------
 
         let app;
@@ -161,8 +165,8 @@
         let auth;
         let userId = null;
         let isAuthReady = false;
-        let currentUserName = null; // ชื่อผู้ใช้ (Nickname) ของผู้ใช้ปัจจุบัน
-        const userNicknames = new Map(); // Cache สำหรับเก็บชื่อผู้ใช้ทั้งหมด
+        let currentUserName = null; // Current user's display name (Nickname)
+        const userNicknames = new Map(); // Cache for all fetched nicknames
 
         const threadsContainer = document.getElementById('threads-container');
         const authStatusElement = document.getElementById('auth-status');
@@ -268,7 +272,7 @@
                     ? `<span class="text-xs bg-red-700 text-white font-medium px-2 py-0.5 rounded-full mr-2">ADMIN MODE</span>`
                     : '';
                 
-                const displayNameText = currentUserName ? currentUserName : `User ID: ${userId.substring(0, 8)}...`;
+                const displayNameText = currentUserName ? currentUserName : `User ID: ${userId}`;
                 
                 statusText = `✅ เชื่อมต่อแล้ว. ${adminTag}ชื่อผู้ใช้: <span class="font-bold">${displayNameText}</span>`;
                 authStatusElement.className = `mt-4 p-2 text-sm ${adminColor} rounded-lg`;
@@ -278,19 +282,18 @@
             }
 
             authStatusElement.innerHTML = statusText;
-            submitButton.disabled = !userId || !currentUserName; // Disable posting until nickname is set
+            // Disable posting until nickname is set and user is authenticated
+            submitButton.disabled = !userId || !currentUserName; 
+            
+            // Re-render threads to enable/disable comment posting buttons based on currentUserName
+            // Note: A full re-render is expensive, but necessary here to update dynamic buttons inside threads.
+            listenForThreads(); 
         }
 
 
         // --- Firebase Initialization and Authentication ---
 
         async function initializeFirebase() {
-            if (typeof __firebase_config === 'undefined' && firebaseConfig.apiKey.includes("YOUR_")) {
-                showModal('Configuration Error', 'Please replace YOUR_API_KEY and other Firebase details in the code for self-hosting.');
-                authStatusElement.textContent = '❌ Configuration Required';
-                return;
-            }
-
             try {
                 // setLogLevel('debug'); // Uncomment this line to see detailed Firebase logs in console
                 app = initializeApp(firebaseConfig);
@@ -301,7 +304,8 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
-                        await setupUserAndNickname(user.uid);
+                        // Fetch nickname or prompt for setup
+                        await setupUserAndNickname(user.uid); 
                     } else {
                         userId = null;
                         currentUserName = null;
@@ -347,7 +351,7 @@
                 console.error(`Error fetching nickname for ${uid}:`, error);
             }
             // Fallback: Use truncated ID if name doesn't exist or failed to fetch
-            const fallbackName = `User-${uid.substring(0, 4)}`;
+            const fallbackName = `User-${uid.substring(0, 4)}...`;
             userNicknames.set(uid, fallbackName); 
             return fallbackName;
         }
@@ -377,8 +381,8 @@
             const displayNameInput = document.getElementById('display-name');
             const newDisplayName = displayNameInput.value.trim();
 
-            if (!newDisplayName) {
-                showModal('ข้อผิดพลาด', 'กรุณาตั้งชื่อผู้ใช้');
+            if (!newDisplayName || newDisplayName.length > 20) {
+                showModal('ข้อผิดพลาด', 'กรุณาตั้งชื่อผู้ใช้ 1-20 ตัวอักษร');
                 return;
             }
             if (!userId) {
@@ -431,7 +435,8 @@
                 closeModal();
                 showModal('เข้าสู่ระบบสำเร็จ', `คุณเข้าสู่ระบบในฐานะผู้ดูแล (Admin) ด้วย User ID: ${userId} เรียบร้อยแล้ว`);
                 updateAuthStatusUI();
-                listenForThreads(); // Re-render to show delete buttons
+                // Re-render threads to show delete buttons
+                listenForThreads(); 
             } else {
                 showModal('เข้าสู่ระบบไม่สำเร็จ', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
             }
@@ -463,10 +468,28 @@
                 showModal('สิทธิ์ไม่เพียงพอ', 'คุณไม่มีสิทธิ์ในการลบกระทู้นี้ กรุณาเข้าสู่ระบบในฐานะ Admin');
                 return;
             }
-            // Confirmation via custom modal is generally needed here, but for brevity using simple delete.
+            // Note: Cascading delete for subcollections (comments) must be handled by Firestore Rules/Cloud Functions.
+            // On the client side, we just delete the thread document.
             try {
-                await deleteDoc(getThreadDocRef(threadId));
-                showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} เรียบร้อยแล้ว`);
+                let retryCount = 0;
+                const maxRetries = 5;
+                let delay = 1000;
+
+                while (retryCount < maxRetries) {
+                    try {
+                        await deleteDoc(getThreadDocRef(threadId));
+                        showModal('ลบสำเร็จ', `ลบกระทู้ ID: ${threadId} เรียบร้อยแล้ว`);
+                        break;
+                    } catch (error) {
+                        retryCount++;
+                        if (retryCount >= maxRetries) {
+                            throw error;
+                        }
+                        console.warn(`Firestore thread delete failed, retrying in ${delay / 1000}s... Attempt ${retryCount}`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; 
+                    }
+                }
             } catch (error) {
                 console.error("Error deleting thread:", error);
                 showModal('ลบไม่สำเร็จ', `ไม่สามารถลบกระทู้: ${error.message}`);
@@ -481,7 +504,24 @@
             }
 
             try {
-                await deleteDoc(getCommentDocRef(threadId, commentId));
+                let retryCount = 0;
+                const maxRetries = 5;
+                let delay = 1000;
+
+                while (retryCount < maxRetries) {
+                    try {
+                        await deleteDoc(getCommentDocRef(threadId, commentId));
+                        break;
+                    } catch (error) {
+                        retryCount++;
+                        if (retryCount >= maxRetries) {
+                            throw error;
+                        }
+                        console.warn(`Firestore comment delete failed, retrying in ${delay / 1000}s... Attempt ${retryCount}`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; 
+                    }
+                }
             } catch (error) {
                 console.error("Error deleting comment:", error);
                 showModal('ลบไม่สำเร็จ', `ไม่สามารถลบความคิดเห็น: ${error.message}`);
@@ -505,7 +545,7 @@
             const commenterName = getDisplayName(comment.userId);
 
             const creatorTag = isCreator 
-                ? `<span class="text-xs bg-green-100 text-green-600 font-medium px-2 py-0.5 rounded-full">คุณ</span>`
+                ? `<span class="text-xs bg-green-100 text-green-600 font-medium px-2 py-0.5 rounded-full mr-1">คุณ</span>`
                 : '';
                 
             const deleteButton = isAdmin
@@ -534,6 +574,10 @@
 
             const commentsQuery = query(getCommentsCollectionRef(threadId));
 
+            // Unsubscribe listener if it exists before attaching a new one (important for re-renders)
+            // This is handled by onSnapshot returning an unsubscribe function, which is not tracked globally here, 
+            // but is acceptable since thread elements are recreated/replaced upon major data change.
+            
             const unsubscribe = onSnapshot(commentsQuery, async (snapshot) => {
                 commentsListEl.innerHTML = ''; 
 
@@ -545,7 +589,7 @@
                     userIdsToFetch.add(data.userId);
                 });
 
-                // Fetch nicknames for all commenters in this thread
+                // Fetch nicknames for all commenters in this thread (updates cache)
                 const fetchPromises = Array.from(userIdsToFetch).map(uid => fetchNickname(uid));
                 await Promise.all(fetchPromises);
 
@@ -553,7 +597,7 @@
                 comments.sort((a, b) => {
                     const timeA = a.createdAt?.toMillis() || 0;
                     const timeB = b.createdAt?.toMillis() || 0;
-                    return timeA - timeB; 
+                    return timeA - timeB; // Sort ascending (oldest first)
                 });
                 
                 if (toggleButton) {
@@ -607,7 +651,7 @@
             try {
                 let retryCount = 0;
                 const maxRetries = 5;
-                let delay = 1000;
+                let delay = 1000; // 1 second
 
                 while (retryCount < maxRetries) {
                     try {
@@ -623,6 +667,7 @@
                             throw error;
                         }
                         console.warn(`Firestore comment write failed, retrying in ${delay / 1000}s... Attempt ${retryCount}`);
+                        // Exponential backoff
                         await new Promise(resolve => setTimeout(resolve, delay));
                         delay *= 2; 
                     }
@@ -642,7 +687,7 @@
 
         /** Listens for real-time updates on the threads collection. */
         function listenForThreads() {
-            if (!isAuthReady || !userId || !db) {
+            if (!isAuthReady || !db) {
                 return;
             }
 
@@ -661,14 +706,14 @@
                     userIdsToFetch.add(data.userId);
                 });
 
-                // Fetch nicknames for all thread creators
+                // Fetch nicknames for all thread creators (updates cache)
                 const fetchPromises = Array.from(userIdsToFetch).map(uid => fetchNickname(uid));
                 await Promise.all(fetchPromises);
 
                 threads.sort((a, b) => {
                     const timeA = a.createdAt?.toMillis() || 0;
                     const timeB = b.createdAt?.toMillis() || 0;
-                    return timeB - timeA;
+                    return timeB - timeA; // Sort descending (newest first)
                 });
 
                 if (threads.length === 0) {
@@ -694,9 +739,8 @@
             threadEl.id = `thread-${thread.id}`;
             threadEl.className = 'bg-white p-6 rounded-xl shadow-lg border-l-4 border-indigo-500 hover:shadow-xl transition duration-300';
             
-            const contentPreview = thread.content.length > 150 
-                ? thread.content.substring(0, 150) + '...' 
-                : thread.content;
+            // Show full content inside the thread element
+            const contentDisplay = thread.content; 
 
             const isCreator = thread.userId === userId;
             
@@ -717,7 +761,7 @@
             // Initial HTML structure with Comment Section hidden
             threadEl.innerHTML = `
                 <h3 class="text-xl font-bold text-gray-800 mb-2">${thread.title}</h3>
-                <p class="text-gray-600 mb-4 whitespace-pre-wrap">${contentPreview}</p>
+                <p class="text-gray-600 mb-4 whitespace-pre-wrap">${contentDisplay}</p>
                 
                 <div class="flex justify-between items-center text-sm text-gray-500 border-t pt-3 mt-3">
                     <span class="flex items-center space-x-2">
@@ -768,6 +812,8 @@
             // 2. Enable comment button if authenticated state is known AND nickname is set
             if (isAuthReady && userId && currentUserName) {
                 commentSubmitButton.disabled = false;
+            } else {
+                 commentSubmitButton.textContent = currentUserName ? 'ส่งความคิดเห็น' : 'กรุณาตั้งชื่อผู้ใช้';
             }
 
             // 3. Listener for Comment Form submission
@@ -783,6 +829,7 @@
                 } else {
                     commentsSection.classList.add('hidden');
                     const currentCountText = toggleButton.textContent;
+                    // Replace 'ซ่อนความคิดเห็น' with 'แสดงความคิดเห็น (X รายการ)' text, preserving the count
                     toggleButton.textContent = currentCountText.replace('ซ่อนความคิดเห็น', 'แสดงความคิดเห็น');
                 }
             });
@@ -847,7 +894,9 @@
                 showModal('โพสต์ไม่สำเร็จ', `เกิดข้อผิดพลาดในการโพสต์กระทู้ (อาจเกิดจาก Security Rules ไม่อนุญาต): ${error.message}`);
             } finally {
                 submitButton.textContent = 'โพสต์กระทู้';
-                submitButton.disabled = false;
+                // Button is re-enabled by updateAuthStatusUI via onAuthStateChanged or nickname setup success
+                // We keep it disabled here to rely on the central auth status logic.
+                // submitButton.disabled = false;
             }
         }
 
